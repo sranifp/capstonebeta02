@@ -1,3 +1,4 @@
+// File: app/page.tsx
 import Image from "next/image";
 import Link from "next/link";
 
@@ -30,8 +31,9 @@ export default function HomePage() {
               that fits — not to change it, but to grow together.
             </p>
 
+            {/* BARIS INI YANG MENGALAMI PERUBAHAN */}
             <Link
-              href="/rekomendasi"
+              href="/auth/register" // Mengubah link tujuan dari /rekomendasi ke /auth/register
               className="inline-flex items-center gap-2 mt-8 rounded-full bg-white text-emerald-800 px-6 py-2.5 
                          hover:bg-emerald-50 transition shadow-sm text-lg font-medium"
             >
