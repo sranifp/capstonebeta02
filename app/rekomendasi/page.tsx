@@ -1,9 +1,11 @@
 // app/rekomendasi/page.tsx
 "use client";
+
 import { useEffect, useMemo, useState } from "react";
 import Fuse from "fuse.js";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Plant, UserFilter } from "@/lib/types";
 import { fetchPlants } from "@/lib/loadData";
 import { recommend } from "@/lib/recommend";
@@ -11,50 +13,9 @@ import FiltersPanel from "@/components/FiltersPanel";
 import PlantList from "@/components/PlantList";
 import ExportPDFButton from "@/components/ExportPDFButton";
 
-/* ===== UI: Search bar dengan tombol di kanan ===== */
-function SearchBar({
-  value,
-  onChange,
-  onSubmit,
-  placeholder = "Search plants...",
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onSubmit: () => void;
-  placeholder?: string;
-}) {
-  return (
-    <div className="flex items-stretch gap-0">
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="
-          w-full h-12 px-5 rounded-l-full bg-white text-gray-900
-          ring-1 ring-emerald-200 focus:ring-2 focus:ring-emerald-400
-          outline-none placeholder:text-gray-400
-        "
-      />
-      <button
-        onClick={onSubmit}
-        className="
-          h-12 px-5 rounded-r-full bg-emerald-600 text-white
-          hover:bg-emerald-700 active:bg-emerald-800
-          ring-1 ring-emerald-600
-          inline-flex items-center justify-center gap-2
-        "
-        aria-label="Search"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <span className="hidden sm:inline">Search</span>
-      </button>
-    </div>
-  );
-}
+// Firebase
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebaseConfig";
 
 export default function RekomendasiPage() {
   const [all, setAll] = useState<Plant[]>([]);
@@ -62,8 +23,26 @@ export default function RekomendasiPage() {
   const [filter, setFilter] = useState<UserFilter>({});
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<number[]>([]);
-  const [scrolled, setScrolled] = useState(false); // <- dipakai untuk efek blur header
+  const [scrolled, setScrolled] = useState(false);
 
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true); // tambahkan indikator loading
+
+  // Cek status login Firebase
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
+      if (!currentUser) {
+        router.push("/login"); // kalau belum login, arahkan ke login
+      } else {
+        setUser(currentUser);
+      }
+      setLoading(false); // berhenti loading setelah pengecekan
+    });
+    return () => unsub();
+  }, [router]);
+
+  // Ambil data tanaman
   useEffect(() => {
     fetchPlants().then((data) => {
       setAll(data);
@@ -71,11 +50,10 @@ export default function RekomendasiPage() {
     });
   }, []);
 
-  // pantau scroll (untuk blur sticky search)
+  // Scroll blur effect
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
@@ -111,40 +89,45 @@ export default function RekomendasiPage() {
     setShown(fuse.search(val).map((r) => r.item));
   };
 
-  const onSearchSubmit = () => onSearchChange(query);
-
   const toggleSelect = (id: number) =>
-    setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+    setSelected((cur) =>
+      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+    );
 
   const selectedPlants = shown.filter((p) => selected.includes(p.id));
 
+  // Jika masih loading, tampilkan tampilan sementara
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-white text-gray-800">
+        <p className="text-lg font-medium">Memuat...</p>
+      </main>
+    );
+  }
+
+  // Jika belum login (tapi sudah dicek), redirect ke login
+  if (!user) return null;
+
   return (
-    <main className="min-h-[100dvh] bg-white text-gray-900">
+    <main className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto grid max-w-[1400px] grid-cols-1 md:grid-cols-[340px_1fr]">
         {/* SIDEBAR */}
-        <aside className="bg-emerald-800 text-white p-6 md:sticky md:top-0 md:h-[100dvh] md:overflow-y-auto">
-          {/* Header kiri-kanan */}
+        <aside className="bg-emerald-800 text-white p-6 md:sticky md:top-0 md:h-screen md:overflow-y-auto">
           <div className="mb-6 flex items-center justify-between">
-            {/* Kembali pakai <Link/> -> aman lint */}
             <Link
-              href="/auth/login"
-              className="
-                inline-flex items-center gap-1.5 rounded-md px-3 py-1.5
-                bg-white/10 hover:bg-white/20 transition text-sm font-medium
-              "
+              href="/"
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5
+                         bg-white/10 hover:bg-white/20 transition text-sm font-medium"
             >
-              <span aria-hidden>←</span>
-              <span>Kembali</span>
+              ← Kembali
             </Link>
 
-            {/* Logo (tanpa teks) */}
             <Image
               src="/hero.png"
               alt="PlantMatch logo"
-              width={120}
-              height={120}
-              priority
-              className="w-24 h-24 object-contain drop-shadow-lg"
+              width={100}
+              height={100}
+              className="w-20 h-20 object-contain drop-shadow-lg"
             />
           </div>
 
@@ -167,37 +150,24 @@ export default function RekomendasiPage() {
           </div>
         </aside>
 
-        {/* CONTENT */}
-        <section className="relative p-6 md:p-8 bg-white">
-          {/* Fade + blur atas & bawah agar scroll terlihat halus */}
-          <div className="pointer-events-none absolute top-0 left-0 right-0 h-8
-                          bg-gradient-to-b from-white/90 via-white/40 to-transparent
-                          backdrop-blur-sm z-30" />
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8
-                          bg-gradient-to-t from-white/90 via-white/40 to-transparent
-                          backdrop-blur-sm z-30" />
-
-          <div className="mx-auto max-w-6xl relative z-20">
-            {/* Sticky Search Bar */}
-            <div
-              className={`sticky top-4 z-[60] rounded-2xl px-5 py-4 mb-6 ring-1 ring-emerald-100 shadow-[0_1px_3px_rgba(0,0,0,0.06)]
-                transition-all duration-300 ${
-                  scrolled ? "bg-white/80 backdrop-blur-md shadow-md" : "bg-white/90"
-                }`}
-            >
-              <SearchBar
+        {/* KONTEN UTAMA */}
+        <section className="relative p-6 md:p-8">
+          <div className="sticky top-4 z-50 bg-white/90 rounded-2xl px-5 py-4 mb-6 ring-1 ring-emerald-100 shadow-sm backdrop-blur-md">
+            <div className="flex items-center gap-2">
+              <input
                 value={query}
-                onChange={onSearchChange}
-                onSubmit={onSearchSubmit}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder="Cari tanaman..."
+                className="flex-1 h-12 px-5 rounded-full bg-white text-gray-900 ring-1 ring-emerald-200 focus:ring-2 focus:ring-emerald-400 outline-none placeholder:text-gray-400"
               />
             </div>
-
-            <PlantList
-              plants={shown}
-              selectedIds={selected}
-              onToggleSelect={toggleSelect}
-            />
           </div>
+
+          <PlantList
+            plants={shown}
+            selectedIds={selected}
+            onToggleSelect={toggleSelect}
+          />
         </section>
       </div>
     </main>

@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ... (file yang diabaikan lainnya)
+# Abaikan Firebase/Google Cloud Service Account Key
+firebase-seeder/capstone-8fb94-firebase-adminsdk-fbsvc-c8e04ce462.json
