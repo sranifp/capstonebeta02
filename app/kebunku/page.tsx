@@ -35,21 +35,26 @@ const formatStartAtDate = (date: any) => {
     year: "numeric",
   });
 };
-// Hitung jumlah hari sejak mulai tanam
-const getDaysAlive = (startedAt: any) => {
-  let startDate: Date;
-
-  // Kalau Firestore Timestamp
-  if (startedAt && typeof startedAt.toDate === "function") {
-    startDate = startedAt.toDate();
-  } else {
-    startDate = new Date(startedAt);
-  }
-
+// Hitung lama tanaman hidup
+const getTimeAlive = (startedAt: any) => {
+  if (!startedAt) return "Baru ditanam";
+  const startDate =
+    typeof startedAt.toDate === "function"
+      ? startedAt.toDate()
+      : new Date(startedAt);
   const now = new Date();
+
   const diffMs = now.getTime() - startDate.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  return diffDays >= 0 ? diffDays : 0;
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays < 1) {
+    // kalau masih < 1 hari, tampilkan dalam jam
+    return `${diffHours} jam`;
+  } else {
+    // kalau sudah lebih dari 1 hari, tampilkan dalam hari
+    return `${diffDays} hari`;
+  }
 };
 
 export default function KebunKuPage() {
@@ -167,10 +172,11 @@ export default function KebunKuPage() {
                 className="bg-white rounded-xl shadow-md overflow-hidden text-gray-900 hover:shadow-xl transition transform hover:-translate-y-0.5 border border-gray-100 group"
               >
                 <div className="relative p-3">
-                {/* Badge Lama Hidup */}
-                <div className="absolute top-3 left-3 bg-emerald-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-md">
-                    {getDaysAlive(plant.startedAt)} hari 🌱
+                {/* Badge Counting Days di kanan atas gambar */}
+                <div className="absolute top-3 right-3 bg-emerald-600 text-white text-sm font-semibold px-3 py-1 rounded-full shadow-md">
+                {getTimeAlive(plant.startedAt)}
                 </div>
+
 
                 {/* Icon tanda sudah ditanam */}
                 <div className="absolute top-3 right-3 bg-white p-1 rounded-full border border-gray-300 shadow-sm opacity-70 group-hover:opacity-100 transition flex items-center justify-center w-8 h-8">
