@@ -1,71 +1,89 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, db } from "@/lib/firebaseConfig"; // Menggunakan impor Firebase Anda yang sudah ada
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { auth, db } from "@/lib/firebaseConfig";
+import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-// Helper function untuk memformat tanggal dan menangani 'Invalid Date' / Firestore Timestamp
-const formatStartAtDate = (dateString: any) => {
-  let date: Date;
-  if (dateString && typeof dateString.toDate === 'function') {
-    date = dateString.toDate();
-  } else if (dateString) {
-    date = new Date(dateString);
-  } else {
-    return "Tanggal tidak tersedia";
-  }
+interface Plant {
+  id: number;
+  latin: string;
+  family: string;
+  common: string[];
+  category?: string;
+}
 
-  if (isNaN(date.getTime())) {
-    return "Invalid Date";
-  }
+interface UserPlant {
+  id: string;
+  plantId: number;
+  startedAt: Timestamp;
+  latinName: string;
+  lastCommonName: string;
+}
 
-  return date.toLocaleDateString("id-ID", {
+const formatStartAtDate = (date: any) => {
+  let d: Date;
+  if (date && typeof date.toDate === "function") d = date.toDate();
+  else if (date) d = new Date(date);
+  else return "Tanggal tidak tersedia";
+  if (isNaN(d.getTime())) return "Invalid Date";
+
+  return d.toLocaleDateString("id-ID", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
 };
 
-
 export default function KebunKuPage() {
-  const [plants, setPlants] = useState<any[]>([]);
+  const [plants, setPlants] = useState<UserPlant[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     const fetchUserPlants = async () => {
-      // Pastikan auth/user sudah siap
       const user = auth.currentUser;
       if (!user) {
-        // Ini akan berjalan jika user belum login saat component dimuat
-        router.push("/login");
+        router.replace("/login");
         return;
       }
 
       try {
+        // 1️⃣ Ambil semua data tanaman dari koleksi "plants"
+        const plantsSnapshot = await getDocs(collection(db, "plants"));
+        const allPlants: Plant[] = plantsSnapshot.docs.map((doc) => ({
+          id: Number(doc.data().id),
+          latin: doc.data().latin,
+          family: doc.data().family,
+          common: doc.data().common || [],
+          category: doc.data().category || "",
+        }));
+
+        // 2️⃣ Ambil semua data user_plants milik user ini
         const q = query(
           collection(db, "user_plants"),
           where("userId", "==", user.uid)
         );
         const querySnapshot = await getDocs(q);
-        const userPlants = querySnapshot.docs.map((doc) => {
-          const data = doc.data();
 
-          // >>> PERBAIKAN LOGIKA NAMA TANAMAN DIMULAI DI SINI <<<
-          // 1. Judul Utama: Prioritaskan Nama Latin (latinName)
-          const mainName = data.latinName || data.plantName || "Tanaman Tak Dikenal";
-          
-          // 2. Kategori/Subtitle: Gunakan Nama Umum/Kategori
-          const subCategory = data.plantName || data.plantCategory || "Tanaman Hias"; 
+        // 3️⃣ Join user_plants dengan data master plants
+        const userPlants: UserPlant[] = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+          const plantId = Number(data.plantId);
+
+          // cari di master plants
+          const match = allPlants.find((p) => p.id === plantId);
 
           return {
             id: doc.id,
-            plantName: mainName,      // Sekarang ini bisa jadi "Bougainvillea"
-            plantCategory: subCategory, // Sekarang ini bisa jadi "Paper flower"
-            plantId: data.plantId,
-            ...data,
+            plantId: plantId,
+            startedAt: data.startedAt,
+            latinName: match?.latin || "Nama Latin Tidak Diketahui",
+            lastCommonName:
+              match?.common?.[match.common.length - 1] ||
+              match?.common?.[0] ||
+              "Tanaman Tak Dikenal",
           };
         });
 
@@ -88,8 +106,8 @@ export default function KebunKuPage() {
     );
 
   return (
-    <div className="min-h-screen bg-emerald-800 text-white">
-      {/* HEADER NAVIGASI */}
+    <div className="min-h-screen bg-emerald-800 text-white font-[Inter]">
+      {/* HEADER */}
       <header className="py-6 px-4 bg-emerald-900 shadow-xl">
         <div className="max-w-7xl mx-auto flex justify-center gap-4">
           <Link
@@ -106,94 +124,103 @@ export default function KebunKuPage() {
           </Link>
         </div>
       </header>
-      
+
       <main className="py-10 px-6 max-w-7xl mx-auto">
-        {/* Judul */}
         <h1 className="text-4xl font-extrabold text-center text-white mb-8">
           🌱 My Little Garden
         </h1>
 
         {plants.length === 0 ? (
-          /* Tampilan Kosong */
           <div className="text-center p-10 bg-white rounded-xl shadow-lg max-w-lg mx-auto text-gray-700">
-             <p className="text-xl font-semibold mb-4">
-               Kamu belum menanam tanaman apa pun.
-             </p>
-             <Link
-               href="/rekomendasi"
-               className="inline-block px-4 py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition"
-             >
-               Cari Tanaman
-             </Link>
+            <p className="text-xl font-semibold mb-4">
+              Kamu belum menanam tanaman apa pun.
+            </p>
+            <Link
+              href="/rekomendasi"
+              className="inline-block px-4 py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition"
+            >
+              Cari Tanaman
+            </Link>
           </div>
         ) : (
-          /* Daftar Tanaman - Grid dan Card Style Mirip All Plants */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {plants.map((plant) => (
-              // LINK KE HALAMAN DETAIL TANAMAN
               <Link
-                key={plant.id} 
-                // !!! INI BAGIAN PENTING UNTUK LINK DETAIL !!!
-                // plant.plantId harus berisi ID unik tanaman (misalnya: 'amelia')
-                href={`/tanaman/${plant.plantId}`} 
-                
+                key={plant.id}
+                href={`/tanaman/${plant.plantId}`}
                 className="bg-white rounded-xl shadow-md overflow-hidden text-gray-900 hover:shadow-xl transition transform hover:-translate-y-0.5 border border-gray-100 group"
               >
-                {/* Area Gambar */}
                 <div className="relative p-3">
-                    {/* Checkbox Placeholder (Untuk konsistensi visual dengan All Plants) */}
-                    <div className="absolute top-5 right-5 bg-white p-1 rounded-md border border-gray-300 shadow-sm cursor-pointer opacity-70 group-hover:opacity-100 transition">
-                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                    </div>
-
-                    <div className="w-full h-56 flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden">
-                      <img
-                        // PATH GAMBAR - Pastikan plant.plantId cocok dengan nama file gambar
-                        src={`/images/plants/${plant.plantId}.jpg`}
-                        alt={plant.plantName}
-                        className="w-full h-full object-cover p-2" 
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.onerror = null; 
-                          // Ganti dengan placeholder yang jelas, misalnya dari layanan eksternal 
-                          // atau pastikan path /images/default_plant.jpg ADA di folder public Anda.
-                          target.src = "https://placehold.co/400x300/e0f2f1/065f46?text=Image+Missing"; 
-                          console.error(`Gambar untuk plantId: ${plant.plantId} tidak ditemukan. Menggunakan placeholder.`);
-                        }}
+                  <div className="absolute top-5 right-5 bg-white p-1 rounded-full border border-gray-300 shadow-sm opacity-70 group-hover:opacity-100 transition flex items-center justify-center w-8 h-8">
+                    <svg
+                      className="w-5 h-5 text-emerald-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
                       />
-                    </div>
+                    </svg>
+                  </div>
+
+                  <div className="w-full h-56 flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden">
+                    <img
+                    src={`/images/plants/${plant.plantId}.jpg`}
+                    alt={plant.lastCommonName}
+                    className="w-full h-full object-cover p-2"
+                    onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+
+                        // urutan fallback ekstensi
+                        const extensions = [".png", ".jpeg", ".webp", ".jpg", ".JPG", ".PNG"];
+                        const currentSrc = target.src;
+                        const currentExt = currentSrc.substring(currentSrc.lastIndexOf("."));
+                        const nextIndex = extensions.indexOf(currentExt) + 1;
+
+                        if (nextIndex < extensions.length) {
+                        // coba ekstensi berikutnya
+                        const nextExt = extensions[nextIndex];
+                        target.src = `/images/plants/${plant.plantId}${nextExt}`;
+                        } else {
+                        // kalau semua gagal, pakai default
+                        target.onerror = null;
+                        target.src = "/images/default_plant.jpg";
+                        }
+                    }}
+                    />
+
+                  </div>
                 </div>
-                
-                {/* Area Teks/Informasi */}
+
                 <div className="p-4 pt-0">
-                    <h2 className="text-xl font-semibold text-emerald-800 mb-0">
-                      {plant.plantName} {/* Sekarang menampilkan nama latin jika ada */}
-                    </h2>
-                    {/* Kategori Tanaman */}
-                    <p className="text-gray-600 text-sm mb-3">
-                      {plant.plantCategory} {/* Sekarang menampilkan nama umum/kategori */}
-                    </p>
-                    {/* Tanggal Mulai Tanam */}
-                    <p className="text-gray-500 text-xs border-t border-gray-100 pt-3">
-                      Mulai menanam:{" "}
-                      <span className="font-medium text-emerald-600">
-                        {formatStartAtDate(plant.startedAt)}
-                      </span>
-                    </p>
+                  <h2 className="text-xl font-semibold text-emerald-800 mb-0">
+                    {plant.lastCommonName}
+                  </h2>
+                  <p className="text-gray-600 text-sm mb-3 italic">
+                    {plant.latinName}
+                  </p>
+                  <p className="text-gray-500 text-xs border-t border-gray-100 pt-3">
+                    Mulai menanam:{" "}
+                    <span className="font-medium text-emerald-600">
+                      {formatStartAtDate(plant.startedAt)}
+                    </span>
+                  </p>
                 </div>
               </Link>
             ))}
           </div>
         )}
-
       </main>
 
-      {/* FOOTER */}
       <footer className="w-full text-center py-6 border-t border-emerald-700 text-sm text-emerald-200 mt-10">
         © {new Date().getFullYear()}{" "}
         <span className="text-emerald-400 font-semibold">PlantMatch</span>
       </footer>
-
     </div>
   );
 }
