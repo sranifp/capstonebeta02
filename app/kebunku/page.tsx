@@ -177,20 +177,6 @@ export default function KebunKuPage() {
                 {getTimeAlive(plant.startedAt)}
                 </div>
 
-
-                {/* Icon tanda sudah ditanam */}
-                <div className="absolute top-3 right-3 bg-white p-1 rounded-full border border-gray-300 shadow-sm opacity-70 group-hover:opacity-100 transition flex items-center justify-center w-8 h-8">
-                    <svg
-                    className="w-5 h-5 text-emerald-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                    >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                </div>
-
                 <div className="w-full h-56 flex justify-center items-center bg-gray-50 rounded-lg overflow-hidden">
                     <img
                     src={`/images/plants/${plant.plantId}.jpg`}
